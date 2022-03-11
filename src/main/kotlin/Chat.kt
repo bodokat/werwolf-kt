@@ -3,9 +3,7 @@ import io.ktor.routing.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.*
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.HashMap
@@ -24,7 +22,8 @@ fun Route.mainChatRoute() {
                 .mapNotNull { it as? Frame.Text }
                 .map { it.readText() }
                 .map { "[${thisConnection.name}]: $it" }
-                .map { message -> connections.map { connection -> async { connection.session.send(message) } }.map { it.await() } }
+                .onEach { message -> connections.map { connection -> async { connection.session.send(message) } }.map { it.await() } }
+                .collect()
         } catch (e: Exception) {
             println(e.message)
         } finally {
@@ -43,7 +42,7 @@ fun Route.chatRoute() {
         val chatroom = chatrooms.computeIfAbsent(name) { Chatroom() }
         try {
             chatroom.add(thisConnection)
-            chatroom.send("Welcome, ${thisConnection.name}! There are ${chatroom.connections.size} users currently connected.")
+            chatroom.send("Welcome, ${thisConnection.name}! There are ${chatroom.connections.size} user(s) currently connected.")
             for (frame in incoming) {
                 frame as? Frame.Text ?: continue
                 val received = frame.readText()

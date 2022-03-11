@@ -2,7 +2,6 @@ import io.ktor.http.cio.websocket.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.serializer
 import lobby.OutgoingMessage
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
@@ -15,12 +14,11 @@ class User(val name: String, private val session: DefaultWebSocketSession) {
     private val outstandingChoices: MutableMap<Int, CompletableDeferred<Int>> = Collections.synchronizedMap(HashMap())
 
     suspend fun send(text: String) {
-        val message: OutgoingMessage = OutgoingMessage.Text(text)
-        session.send(Json.encodeToString(Json.serializersModule.serializer(),message))
+        session.send(text)
     }
 
     fun response(id: Int, choice: Int) {
-        outstandingChoices[id]?.complete(choice)
+        outstandingChoices.remove(id)?.complete(choice)
     }
 
     suspend fun <T> choice(text: String,options: List<T>): Int {

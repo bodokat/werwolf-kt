@@ -4,10 +4,10 @@ import User
 import io.ktor.http.cio.websocket.*
 import io.ktor.routing.*
 import io.ktor.websocket.*
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -20,8 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class Lobby {
-    val users: MutableList<User> = Collections.synchronizedList(emptyList())
-    val roles: MutableList<Role> = Collections.synchronizedList(listOf(Dorfbewohner,Dorfbewohner,Dorfbewohner,Werwolf))
+    val users: MutableList<User> = Collections.synchronizedList(mutableListOf())
+    val roles: MutableList<Role> = Collections.synchronizedList(mutableListOf(Dorfbewohner,Dorfbewohner,Dorfbewohner,Werwolf))
 
 
     var running = AtomicBoolean(false)
@@ -76,8 +76,21 @@ fun Route.werwolfRoute() {
             lobby.send("Welcome, ${user.name}!")
             incoming.receiveAsFlow()
                 .mapNotNull { it as Frame.Text }
-                .map { Json.decodeFromString<IncomingMessage>(it.readText()) }
-                .map { lobby.handleMessage(it, user) }
+                .map {
+                    val msg = it.readText()
+                    println("Got message: $msg")
+                    try {
+                        val decoded = Json.decodeFromString<IncomingMessage>(msg)
+                        println("Decoded: $decoded")
+                        return@map decoded
+                    } catch (e: SerializationException) {
+                        println("Error while decoding message: $e")
+                        return@map null
+                    }
+                }
+                .filterNotNull()
+                .map { launch { lobby.handleMessage(it, user) } }
+                .collect()
         } catch (e: Exception) {
             println("Exception: $e (${e.message})")
         } finally {
